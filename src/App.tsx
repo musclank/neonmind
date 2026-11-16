@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, Atom, AudioLines, Bot, Braces, Check, ChevronDown, Command, Globe2, Image, LockKeyhole, Menu, MessageSquareText, Search, Sparkles, WandSparkles, X, Zap } from 'lucide-react'
 import { authConfigured, supabase } from './lib/supabase'
 
@@ -25,6 +25,22 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [userEmail, setUserEmail] = useState('')
 
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getSession().then(({ data }) => setUserEmail(data.session?.user.email ?? ''))
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user.email ?? '')
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  async function handleSignOut() {
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) setNotice(error.message)
+    else setNotice('You have been signed out.')
+  }
+
   const visibleTools = useMemo(() => tools.filter(tool => {
     const matchesFilter = filter === 'All tools' || tool.category.toLowerCase() === filter.toLowerCase()
     const matchesQuery = (tool.name + ' ' + tool.description + ' ' + tool.category).toLowerCase().includes(query.toLowerCase())
@@ -40,7 +56,7 @@ export default function App() {
       : await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (result.error) setNotice(result.error.message)
-    else { setUserEmail(email); setNotice(modal === 'signup' ? 'Check your inbox to confirm your account.' : 'You are signed in.') }
+    else { setNotice(modal === 'signup' ? 'Check your inbox to confirm your account.' : 'You are signed in.'); if (modal === 'login') setModal(null) }
   }
 
   return <div className="app-shell">
@@ -51,7 +67,7 @@ export default function App() {
         <a href="#tools" onClick={() => setMobileMenu(false)}>Explore tools</a><a href="#how" onClick={() => setMobileMenu(false)}>How it works</a><a href="#about" onClick={() => setMobileMenu(false)}>About</a>
       </nav>
       <div className="nav-actions">
-        {userEmail ? <span className="user-pill"><span className="online-dot" />{userEmail}</span> : <><button className="btn-quiet" onClick={() => setModal('login')}>Log in</button><button className="btn-primary small" onClick={() => setModal('signup')}>Create account <ArrowUpRight size={15} /></button></>}
+        {userEmail ? <><span className="user-pill"><span className="online-dot" />{userEmail}</span><button className="btn-quiet" onClick={handleSignOut}>Log out</button></> : <><button className="btn-quiet" onClick={() => setModal('login')}>Log in</button><button className="btn-primary small" onClick={() => setModal('signup')}>Create account <ArrowUpRight size={15} /></button></>}
       </div>
       <button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle navigation">{mobileMenu ? <X /> : <Menu />}</button>
     </header>
